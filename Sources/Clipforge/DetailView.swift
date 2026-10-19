@@ -7,6 +7,8 @@ struct DetailPanel: View {
     var body: some View {
         DetailView()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // A ScrollView at the top of the window may draw under the title bar; keep it inside the panel.
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .glassSurface(cornerRadius: 24)
     }
 }
@@ -65,6 +67,7 @@ struct DetailView: View {
                 }
                 .padding(18)
             }
+            .scrollEdgeFade()
         }
     }
 }

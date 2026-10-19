@@ -70,6 +70,31 @@ extension View {
     }
 }
 
+/// Fades scrolling content out over the last few points at the top and bottom, so it
+/// disappears softly at the edge of a panel instead of being cut off.
+struct ScrollEdgeFade: ViewModifier {
+    var top: CGFloat = 14
+    var bottom: CGFloat = 14
+
+    func body(content: Content) -> some View {
+        content.mask {
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: top)
+                Rectangle().fill(Color.black)
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: bottom)
+            }
+        }
+    }
+}
+
+extension View {
+    func scrollEdgeFade(top: CGFloat = 14, bottom: CGFloat = 14) -> some View {
+        modifier(ScrollEdgeFade(top: top, bottom: bottom))
+    }
+}
+
 /// Lets neighbouring glass shapes blend into each other on macOS 26.
 struct GlassGroup<Content: View>: View {
     var spacing: CGFloat = 12
