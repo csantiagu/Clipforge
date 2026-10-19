@@ -169,7 +169,8 @@ jobs:
             echo
             echo "## What's new"
             echo
-            awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2
+            # Body of the newest changelog section, without its heading or leading blank lines.
+            awk '/^## /{n++; next} n==1' CHANGELOG.md | sed '/./,$!d'
             echo
             echo "## Licences"
             echo

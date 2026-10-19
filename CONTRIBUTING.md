@@ -30,7 +30,7 @@ swift run Clipforge # run the app against Homebrew's ffmpeg
 
 ## Releasing
 
-1. Move the "unreleased" notes in `CHANGELOG.md` under the new version number.
+1. In `CHANGELOG.md`, rename the top `## Unreleased` heading to the new version and date. Its bullet points become the release notes.
 2. Tag and push: `git tag v1.0.0 && git push origin v1.0.0`
    (or run the **Release** workflow from the Actions tab and type the version).
 3. GitHub builds `Clipforge-1.0.0-AppleSilicon.dmg` and `Clipforge-1.0.0-Intel.dmg` and publishes them on the Releases page.
