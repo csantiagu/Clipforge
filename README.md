@@ -8,11 +8,9 @@
   Convert and shrink videos on your Mac. A friendly front end for ffmpeg, with ffmpeg built in.
 </p>
 
-<!-- Screenshot: add docs/screenshots/main.png, then remove this comment wrapper.
 <p align="center">
-  <img src="docs/screenshots/main.png" alt="Clipforge with three videos queued, one encoding" width="900">
+  <img src="docs/screenshots/main.png" alt="Clipforge with six videos queued, each showing its size before and after, and the settings panel" width="900">
 </p>
--->
 
 ## What it does
 
@@ -24,11 +22,9 @@
 - **See the size before you start.** Every setting shows what it costs, and the panel shows *now → after*.
 - **Save next to the original or to any folder.** Names stay the same (`movie.mkv` → `movie.mp4`); `_new` is added only when the name is already taken. Nothing is ever overwritten.
 
-<!-- Screenshot: add docs/screenshots/settings.png, then remove this comment wrapper.
 <p align="center">
-  <img src="docs/screenshots/settings.png" alt="Settings panel with presets, size estimate and track picker" width="440">
+  <img src="docs/screenshots/settings.png" alt="Settings panel with presets and the output, video and audio options" width="440">
 </p>
--->
 
 ## Install
 
