@@ -22,7 +22,7 @@
 - **Remux.** Change MKV ↔ MP4 ↔ MOV in seconds, with no quality loss.
 - **Keep only the tracks you want.** Tick audio and subtitle tracks per file, or keep one language across a whole season.
 - **See the size before you start.** Every setting shows what it costs, and the panel shows *now → after*.
-- **Never overwrites anything.** `movie.mkv` → `movie.mp4`, or `movie_new.mkv` when the format stays the same.
+- **Save next to the original or to any folder.** Names stay the same (`movie.mkv` → `movie.mp4`); `_new` is added only when the name is already taken. Nothing is ever overwritten.
 
 <!-- Screenshot: add docs/screenshots/settings.png, then remove this comment wrapper.
 <p align="center">
@@ -66,7 +66,7 @@ Requires macOS 13 or later. On macOS 26 it uses Liquid Glass; earlier versions g
 
 1. Drop videos on the window, or press **⌘O**.
 2. Click a video to tune it. **⌘-click** or **⇧-click** to change several at once.
-3. Pick a **preset**, then adjust anything you like.
+3. Pick a **preset**, then adjust anything you like. **Save to** (in Output) chooses next to the original or a folder of your choice; Clipforge remembers it.
 4. **Tracks to keep:** tick the audio and subtitle tracks you want. With several videos selected, use the **Audio language / Subtitles** menus.
 5. **Estimate** encodes 20 seconds and scales the result up. Bitrate and target-size modes are calculated instantly.
 6. **Start** (⌘↩). Videos are encoded one at a time and your Mac won't idle-sleep. **Stop** (⌘.) deletes the half-written file.

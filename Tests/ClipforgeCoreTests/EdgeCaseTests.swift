@@ -146,6 +146,29 @@ final class EdgeCaseTests: XCTestCase {
         XCTAssertEqual(url.lastPathComponent, "Clip_new.mp4")
     }
 
+    func testOtherFolderKeepsPlainName() {
+        let out = URL(fileURLWithPath: "/Volumes/Backup/Converted")
+        func name(_ path: String, _ c: Container, taken: Set<String> = [], reserved: Set<String> = []) -> String {
+            OutputNamer.outputURL(for: URL(fileURLWithPath: path), container: c, directory: out,
+                                  reserved: reserved, exists: { taken.contains($0.path) }).path
+        }
+        // Same format, other folder: no clash with the original, so no _new.
+        XCTAssertEqual(name("/m/movie.mkv", .mkv), "/Volumes/Backup/Converted/movie.mkv")
+        XCTAssertEqual(name("/m/movie.mkv", .mp4), "/Volumes/Backup/Converted/movie.mp4")
+        // Taken there already → _new.
+        XCTAssertEqual(name("/m/movie.mkv", .mkv, taken: ["/Volumes/Backup/Converted/movie.mkv"]),
+                       "/Volumes/Backup/Converted/movie_new.mkv")
+        // Two queued videos with the same name from different folders.
+        XCTAssertEqual(name("/b/movie.mkv", .mp4, reserved: ["/volumes/backup/converted/movie.mp4"]),
+                       "/Volumes/Backup/Converted/movie_new.mp4")
+    }
+
+    func testChoosingTheSourceFolderBehavesLikeNextToOriginal() {
+        let url = OutputNamer.outputURL(for: URL(fileURLWithPath: "/m/movie.mkv"), container: .mkv,
+                                        directory: URL(fileURLWithPath: "/m/"), exists: { _ in false })
+        XCTAssertEqual(url.path, "/m/movie_new.mkv")
+    }
+
     // MARK: Progress
 
     func testProgressSplitAcrossChunks() {

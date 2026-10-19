@@ -40,6 +40,8 @@ struct Job: Identifiable {
     var estimate: SizeEstimate = .none
     /// What a sampled estimate was computed for, so it survives unrelated refreshes.
     var estimateKey: EstimateKey?
+    /// Where the output goes. nil = next to the original.
+    var outputFolder: URL?
 }
 
 struct EstimateKey: Equatable {
@@ -69,7 +71,14 @@ final class AppModel: ObservableObject {
     private var sleepActivity: NSObjectProtocol?
     private var selectionAnchor: Job.ID?
 
+    /// Folder for newly added videos, remembered between launches. nil = next to the original.
+    @Published private(set) var defaultOutputFolder: URL?
+    private static let outputFolderKey = "outputFolder"
+
     init() {
+        if let path = UserDefaults.standard.string(forKey: Self.outputFolderKey) {
+            defaultOutputFolder = URL(fileURLWithPath: path, isDirectory: true)
+        }
         Task { await loadEncoders() }
     }
 
@@ -115,7 +124,8 @@ final class AppModel: ObservableObject {
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
                   !isDirectory.boolValue else { continue }
-            let job = Job(input: url, settings: defaultSettings)
+            var job = Job(input: url, settings: defaultSettings)
+            job.outputFolder = defaultOutputFolder
             jobs.append(job)
             added.append(job.id)
             Task { await probe(job.id) }
@@ -228,6 +238,41 @@ final class AppModel: ObservableObject {
         refreshAll()
     }
 
+    // MARK: - Destination
+
+    /// nil when the selected videos go to different places.
+    var selectionOutputFolder: URL?? {
+        let folders = selectedJobs.filter { !$0.status.isLocked }.map(\.outputFolder)
+        guard let first = folders.first else { return .some(defaultOutputFolder) }
+        return folders.allSatisfy { $0 == first } ? .some(first) : nil
+    }
+
+    /// Sets the destination for the selected videos and for videos added later.
+    func setOutputFolder(_ folder: URL?) {
+        defaultOutputFolder = folder
+        if let folder {
+            UserDefaults.standard.set(folder.path, forKey: Self.outputFolderKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.outputFolderKey)
+        }
+        for i in jobs.indices where selection.contains(jobs[i].id) && !jobs[i].status.isLocked {
+            jobs[i].outputFolder = folder
+        }
+        refreshAll()
+    }
+
+    func chooseOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Save Here"
+        panel.message = "Choose where converted videos are saved"
+        if let current = defaultOutputFolder { panel.directoryURL = current }
+        if panel.runModal() == .OK, let url = panel.url { setOutputFolder(url) }
+    }
+
     // MARK: - Tracks
 
     func setStream(_ index: Int, on: Bool, in id: Job.ID) {
@@ -278,7 +323,8 @@ final class AppModel: ObservableObject {
         for i in jobs.indices where !jobs[i].status.isLocked {
             guard let info = jobs[i].info else { continue }
             let job = jobs[i]
-            let output = OutputNamer.outputURL(for: job.input, container: job.settings.container, reserved: reserved)
+            let output = OutputNamer.outputURL(for: job.input, container: job.settings.container,
+                                               directory: job.outputFolder, reserved: reserved)
             reserved.insert(output.path.lowercased())
             let command = CommandBuilder.build(info: info, selection: job.selection, settings: job.settings,
                                                input: job.input, output: output)
@@ -372,6 +418,17 @@ final class AppModel: ObservableObject {
     private func encode(_ id: Job.ID, ffmpeg: URL) async {
         refreshAll()
         guard let job = job(id), let info = job.info, let output = job.plannedOutput else { return }
+        // External drives get unplugged; say so instead of letting ffmpeg fail obscurely.
+        if let folder = job.outputFolder {
+            var isDirectory: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory)
+            guard exists, isDirectory.boolValue, FileManager.default.isWritableFile(atPath: folder.path) else {
+                update(id) {
+                    $0.status = .failed("Can't save to “\(folder.lastPathComponent)”: the folder is missing or read-only. Is the drive connected?")
+                }
+                return
+            }
+        }
         // The name was free a moment ago; never touch a file we didn't create.
         if FileManager.default.fileExists(atPath: output.path) {
             update(id) { $0.status = .failed("\(output.lastPathComponent) already exists") }

@@ -54,17 +54,22 @@ public enum SizeEstimator {
 }
 
 public enum OutputNamer {
-    /// Output lives next to the input with the same base name.
-    /// `movie.mkv` → MP4 gives `movie.mp4`; → MKV gives `movie_new.mkv`.
-    /// If that is taken (on disk or by another queued job), `_new`, `_new2`, `_new3`… are tried.
-    public static func outputURL(for input: URL, container: Container, reserved: Set<String> = [],
+    /// Output keeps the input's base name, in `directory` (default: next to the input).
+    /// `movie.mkv` → MP4 gives `movie.mp4`. Saving the same format next to the original
+    /// gives `movie_new.mkv`; in another folder it stays `movie.mkv`.
+    /// If a name is taken (on disk or by another queued job), `_new`, `_new2`, `_new3`… are tried.
+    public static func outputURL(for input: URL, container: Container, directory: URL? = nil,
+                                 reserved: Set<String> = [],
                                  exists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }) -> URL {
-        let directory = input.deletingLastPathComponent()
+        let sourceDirectory = input.deletingLastPathComponent()
+        let directory = directory ?? sourceDirectory
         let base = input.deletingPathExtension().lastPathComponent
         let ext = container.fileExtension
         func isTaken(_ url: URL) -> Bool { exists(url) || reserved.contains(url.path.lowercased()) }
 
-        if input.pathExtension.lowercased() != ext {
+        let sameFolder = directory.standardizedFileURL.path.lowercased()
+            == sourceDirectory.standardizedFileURL.path.lowercased()
+        if !(sameFolder && input.pathExtension.lowercased() == ext) {
             let plain = directory.appendingPathComponent("\(base).\(ext)")
             if !isTaken(plain) { return plain }
         }

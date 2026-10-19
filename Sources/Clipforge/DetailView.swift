@@ -181,6 +181,8 @@ struct SettingsForm: View {
                         .frame(maxWidth: 220)
                     }
                     hint(containerHint)
+                    row("Save to") { DestinationMenu() }
+                    hint("Next to the original, same format, adds _new to the name. In another folder the name stays the same. Nothing is ever overwritten.")
                 }
             }
 
@@ -310,6 +312,56 @@ struct SettingsForm: View {
         case .mp4: return "MP4 plays everywhere. It can't hold picture subtitles (PGS) or DTS/TrueHD audio."
         case .mkv: return "MKV keeps every kind of track and subtitle. Apple devices (QuickTime, iPhone, Apple TV app) don't play it natively."
         case .mov: return "MOV is Apple's format: the same limits as MP4, and it opens nicely in Final Cut and iMovie."
+        }
+    }
+}
+
+/// Where converted files go. Not part of presets, and remembered between launches.
+struct DestinationMenu: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        let current = model.selectionOutputFolder
+        Menu {
+            Button {
+                model.setOutputFolder(nil)
+            } label: {
+                Label("Next to Original", systemImage: "arrow.turn.down.right")
+            }
+            if let remembered = model.defaultOutputFolder, current != .some(remembered) {
+                Button {
+                    model.setOutputFolder(remembered)
+                } label: {
+                    Label(remembered.lastPathComponent, systemImage: "folder")
+                }
+            }
+            Divider()
+            Button("Choose Folder…") { model.chooseOutputFolder() }
+        } label: {
+            Label(title(for: current), systemImage: icon(for: current))
+        }
+        .fixedSize()
+        .help(helpText(for: current))
+    }
+
+    private func title(for folder: URL??) -> String {
+        switch folder {
+        case .none: return "Mixed"
+        case .some(.none): return "Next to Original"
+        case .some(.some(let url)): return url.lastPathComponent
+        }
+    }
+
+    private func icon(for folder: URL??) -> String {
+        if case .some(.some) = folder { return "folder" }
+        return "arrow.turn.down.right"
+    }
+
+    private func helpText(for folder: URL??) -> String {
+        switch folder {
+        case .none: return "The selected videos are saved to different places."
+        case .some(.none): return "Saved in the same folder as each original video."
+        case .some(.some(let url)): return url.path
         }
     }
 }

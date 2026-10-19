@@ -241,13 +241,24 @@ struct JobCard: View {
         }
     }
 
+    /// Where the output goes. The folder is shown whenever it isn't next to the original.
     @ViewBuilder private var outputLine: some View {
         if let output = job.plannedOutput {
-            Label(output.lastPathComponent, systemImage: "arrow.turn.down.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            if let folder = job.outputFolder {
+                Label("\(folder.lastPathComponent) / \(output.lastPathComponent)", systemImage: "folder")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(output.path)
+            } else {
+                Label(output.lastPathComponent, systemImage: "arrow.turn.down.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(output.path)
+            }
         }
     }
 }

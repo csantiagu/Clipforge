@@ -113,6 +113,16 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(info.videoStreams.first?.width, 160)
     }
 
+    func testEncodeIntoAnotherFolder() async throws {
+        let folder = directory.appendingPathComponent("Out Folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let preset = try XCTUnwrap(Preset.builtIn.first { $0.name == "Remux" })
+        let (output, info) = try await encode(settings: preset.settings, directory: folder)
+        XCTAssertEqual(output.deletingLastPathComponent().standardizedFileURL.path, folder.standardizedFileURL.path)
+        XCTAssertEqual(output.lastPathComponent, "My Clip (2026).mp4")
+        XCTAssertEqual(info.videoStreams.count, 1)
+    }
+
     func testTargetSizeLandsNearTarget() async throws {
         var settings = EncodeSettings()
         settings.rateMode = .targetSize
@@ -184,6 +194,11 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(OutputNamer.outputURL(for: mkv, container: .mp4).lastPathComponent, "a_new.mp4")
         XCTAssertEqual(OutputNamer.outputURL(for: mkv, container: .mov).lastPathComponent, "a.mov")
         XCTAssertEqual(OutputNamer.outputURL(for: mkv, container: .mkv).lastPathComponent, "a_new.mkv")
+
+        let other = directory.appendingPathComponent("Converted", isDirectory: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        XCTAssertEqual(OutputNamer.outputURL(for: mkv, container: .mkv, directory: other).path,
+                       other.appendingPathComponent("a.mkv").path)
     }
 
     // MARK: - Helpers
@@ -198,9 +213,10 @@ final class IntegrationTests: XCTestCase {
     }
 
     /// Runs the exact command the app would run, then probes the result.
-    private func encode(settings: EncodeSettings, selection: Set<Int>? = nil) async throws -> (URL, MediaInfo) {
+    private func encode(settings: EncodeSettings, selection: Set<Int>? = nil,
+                        directory: URL? = nil) async throws -> (URL, MediaInfo) {
         let info = try await Probe.run(ffprobe: ffprobe, file: source)
-        let output = OutputNamer.outputURL(for: source, container: settings.container)
+        let output = OutputNamer.outputURL(for: source, container: settings.container, directory: directory)
         let command = CommandBuilder.build(info: info, selection: selection ?? info.defaultSelection,
                                            settings: settings, input: source, output: output)
         let result = try await RunningProcess.run(ffmpeg, ["-loglevel", "error"] + command.arguments)
