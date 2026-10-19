@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2026-10-19)
 
 - First release under the Clipforge name.
 - Convert and shrink videos with presets: Compatible (H.264), Small · fast (HEVC hardware),
