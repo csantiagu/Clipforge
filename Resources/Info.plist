@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Clipforge</string>
+    <key>CFBundleDisplayName</key>
+    <string>Clipforge</string>
+    <key>CFBundleIdentifier</key>
+    <string>io.github.clipforge.app</string>
+    <key>CFBundleExecutable</key>
+    <string>Clipforge</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.video</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 The Clipforge authors. GPL-3.0. Includes FFmpeg (GPL).</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>

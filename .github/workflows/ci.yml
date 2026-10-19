@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build & test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-15 has Xcode 16: builds the frosted-glass fallback.
+        # macos-26 has Xcode 26: builds the real Liquid Glass code path.
+        os: [macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tool versions
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Install ffmpeg (for integration tests)
+        run: brew install ffmpeg
+
+      - name: Build app (release)
+        run: swift build -c release
+
+      - name: Run tests
+        run: swift test
+
+  package:
+    name: Package Clipforge.app
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build bundle with ffmpeg inside
+        run: ./build.sh
+
+      - name: Smoke test bundled ffmpeg
+        run: |
+          build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version | head -1
+          build/Clipforge.app/Contents/MacOS/ffprobe -hide_banner -version | head -1
+          test -f build/Clipforge.app/Contents/Resources/LICENSE
+
+      - name: Zip
+        run: ditto -c -k --keepParent build/Clipforge.app Clipforge.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clipforge-app
+          path: Clipforge.zip
+          retention-days: 14
