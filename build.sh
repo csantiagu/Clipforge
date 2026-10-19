@@ -3,6 +3,10 @@
 #
 #   ./build.sh                     download static ffmpeg for this Mac's CPU (cached in vendor/)
 #   FFMPEG_DIR=/path ./build.sh    use your own ffmpeg + ffprobe binaries from /path
+#   UNIVERSAL=1 ./build.sh         one app for Apple Silicon and Intel (needs full Xcode)
+#   VERSION=1.2.0 ./build.sh       stamp the version shown in Finder and About
+#   SIGN_IDENTITY="Developer ID Application: …" ./build.sh
+#                                  sign for distribution (hardened runtime); default is ad-hoc
 #
 # App icon: put a 1024×1024 PNG at Resources/AppIcon.png (or a ready-made Resources/AppIcon.icns).
 #
@@ -10,33 +14,55 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-ARCH=$(uname -m)                                   # arm64 or x86_64
-case "$ARCH" in
-  arm64)  DL_ARCH=arm64 ;;
-  x86_64) DL_ARCH=amd64 ;;
-  *) echo "Unsupported CPU: $ARCH"; exit 1 ;;
-esac
-
 APP=build/Clipforge.app
-VENDOR=vendor/$ARCH
+SIGN_IDENTITY=${SIGN_IDENTITY:--}
 
-echo "==> Compiling (release, $ARCH)"
-swift build -c release --arch "$ARCH"
-BIN_DIR=$(swift build -c release --arch "$ARCH" --show-bin-path)
-
-echo "==> Getting ffmpeg"
-mkdir -p "$VENDOR"
-if [ -n "${FFMPEG_DIR:-}" ]; then
-  cp "$FFMPEG_DIR/ffmpeg" "$FFMPEG_DIR/ffprobe" "$VENDOR/"
-elif [ ! -x "$VENDOR/ffmpeg" ] || [ ! -x "$VENDOR/ffprobe" ]; then
-  # Static builds by Martin Riedl (https://ffmpeg.martin-riedl.de), signed and notarized.
+# Downloads static ffmpeg + ffprobe for one CPU type into vendor/<arch> (cached).
+# Builds by Martin Riedl (https://ffmpeg.martin-riedl.de), signed and notarized.
+fetch_ffmpeg() {
+  local arch=$1 dl_arch
+  case "$arch" in
+    arm64)  dl_arch=arm64 ;;
+    x86_64) dl_arch=amd64 ;;
+    *) echo "Unsupported CPU: $arch"; exit 1 ;;
+  esac
+  mkdir -p "vendor/$arch"
+  if [ -x "vendor/$arch/ffmpeg" ] && [ -x "vendor/$arch/ffprobe" ]; then return; fi
   for tool in ffmpeg ffprobe; do
-    url="https://ffmpeg.martin-riedl.de/redirect/latest/macos/$DL_ARCH/release/$tool.zip"
+    local url="https://ffmpeg.martin-riedl.de/redirect/latest/macos/$dl_arch/release/$tool.zip"
     echo "    $url"
-    curl -fL --retry 3 -o "$VENDOR/$tool.zip" "$url"
-    unzip -o -q "$VENDOR/$tool.zip" -d "$VENDOR"
-    rm "$VENDOR/$tool.zip"
+    curl -fL --retry 3 -o "vendor/$arch/$tool.zip" "$url"
+    unzip -o -q "vendor/$arch/$tool.zip" -d "vendor/$arch"
+    rm "vendor/$arch/$tool.zip"
   done
+  chmod +x "vendor/$arch/ffmpeg" "vendor/$arch/ffprobe"
+}
+
+if [ "${UNIVERSAL:-0}" = 1 ]; then
+  echo "==> Compiling (release, universal)"
+  swift build -c release --arch arm64 --arch x86_64
+  BIN_DIR=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)
+  echo "==> Getting ffmpeg (arm64 + x86_64)"
+  fetch_ffmpeg arm64
+  fetch_ffmpeg x86_64
+  VENDOR=vendor/universal
+  mkdir -p "$VENDOR"
+  for tool in ffmpeg ffprobe; do
+    lipo -create "vendor/arm64/$tool" "vendor/x86_64/$tool" -output "$VENDOR/$tool"
+  done
+else
+  ARCH=$(uname -m)
+  echo "==> Compiling (release, $ARCH)"
+  swift build -c release --arch "$ARCH"
+  BIN_DIR=$(swift build -c release --arch "$ARCH" --show-bin-path)
+  echo "==> Getting ffmpeg"
+  VENDOR=vendor/$ARCH
+  if [ -n "${FFMPEG_DIR:-}" ]; then
+    mkdir -p "$VENDOR"
+    cp "$FFMPEG_DIR/ffmpeg" "$FFMPEG_DIR/ffprobe" "$VENDOR/"
+  else
+    fetch_ffmpeg "$ARCH"
+  fi
 fi
 chmod +x "$VENDOR/ffmpeg" "$VENDOR/ffprobe"
 
@@ -63,6 +89,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Clipforge" "$APP/Contents/MacOS/Clipforge"
 cp "$VENDOR/ffmpeg" "$VENDOR/ffprobe" "$APP/Contents/MacOS/"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+if [ -n "${VERSION:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER:-1}" "$APP/Contents/Info.plist"
+fi
 # The bundled ffmpeg is GPL: ship the licence and notices with every copy of the app.
 cp LICENSE THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 
@@ -83,12 +113,18 @@ else
   echo "    (no Resources/AppIcon.png yet, using the default icon)"
 fi
 
-# Ad-hoc signature: required to run on Apple Silicon. Not notarized, so the first
-# launch on another Mac needs right-click → Open.
+# Sign the helpers first, then the app. Ad-hoc ("-") is enough to run on Apple Silicon;
+# a Developer ID signature with the hardened runtime is what notarization needs.
 xattr -cr "$APP"
-codesign --force --sign - "$APP/Contents/MacOS/ffmpeg"
-codesign --force --sign - "$APP/Contents/MacOS/ffprobe"
-codesign --force --sign - "$APP"
+if [ "$SIGN_IDENTITY" = "-" ]; then
+  SIGN_FLAGS=(--force --sign -)
+else
+  SIGN_FLAGS=(--force --options runtime --timestamp --sign "$SIGN_IDENTITY")
+fi
+codesign "${SIGN_FLAGS[@]}" "$APP/Contents/MacOS/ffmpeg"
+codesign "${SIGN_FLAGS[@]}" "$APP/Contents/MacOS/ffprobe"
+codesign "${SIGN_FLAGS[@]}" "$APP"
+codesign --verify --strict "$APP"
 
 echo "==> Done: $APP ($(du -sh "$APP" | cut -f1))"
 echo "    Open it with:  open $APP"

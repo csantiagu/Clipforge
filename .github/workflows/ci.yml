@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Tool versions
         run: |
@@ -35,34 +35,46 @@ jobs:
           set -o pipefail
           swift test 2>&1 | tee test.log
           # Surface the totals and any skipped tests on the run page.
-          summary=$(grep -E "Executed [0-9]+ tests" test.log | tail -1)
+          # No match is normal (nothing skipped), so these greps must not fail the step.
+          summary=$(grep -E "Executed [0-9]+ tests" test.log | tail -1 || true)
           echo "::notice title=Tests on ${{ matrix.os }}::${summary}"
-          grep -E "Test skipped" test.log | sed -E 's/.*error: //' | while read -r line; do
+          { grep -E "Test skipped" test.log || true; } | sed -E 's/.*error: //' | while read -r line; do
             echo "::notice title=Skipped on ${{ matrix.os }}::${line}"
           done
 
   package:
-    name: Package Clipforge.app
+    name: Package (universal DMG dry run)
     needs: test
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Build bundle with ffmpeg inside
-        run: ./build.sh
+      - name: Build universal bundle with ffmpeg inside
+        run: UNIVERSAL=1 VERSION=0.0.0-ci BUILD_NUMBER=${{ github.run_number }} ./build.sh
 
-      - name: Smoke test bundled ffmpeg
+      - name: Smoke test
         run: |
+          lipo -archs build/Clipforge.app/Contents/MacOS/Clipforge | tee /dev/stderr | grep -q "x86_64 arm64"
+          lipo -archs build/Clipforge.app/Contents/MacOS/ffmpeg | grep -q "x86_64 arm64"
           build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version | head -1
           build/Clipforge.app/Contents/MacOS/ffprobe -hide_banner -version | head -1
           test -f build/Clipforge.app/Contents/Resources/LICENSE
+          test -f build/Clipforge.app/Contents/Resources/AppIcon.icns
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/Clipforge.app/Contents/Info.plist
 
-      - name: Zip
-        run: ditto -c -k --keepParent build/Clipforge.app Clipforge.zip
+      - name: Make DMG
+        run: scripts/make-dmg.sh 0.0.0-ci
+
+      - name: Mount and check DMG
+        run: |
+          hdiutil attach build/Clipforge-0.0.0-ci.dmg -mountpoint /tmp/cf -nobrowse
+          ls -la /tmp/cf
+          codesign --verify --strict /tmp/cf/Clipforge.app
+          hdiutil detach /tmp/cf
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Clipforge-app
-          path: Clipforge.zip
+          name: Clipforge-dmg
+          path: build/Clipforge-0.0.0-ci.dmg
           retention-days: 14

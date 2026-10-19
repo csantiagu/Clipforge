@@ -28,6 +28,16 @@ swift run Clipforge # run the app against Homebrew's ffmpeg
   with a fallback, so the app still builds with older Xcode and runs on macOS 13.
 - Never overwrite a user's file. Output names come from `OutputNamer`.
 
+## Releasing
+
+1. Move the "unreleased" notes in `CHANGELOG.md` under the new version number.
+2. Tag and push: `git tag v1.0.0 && git push origin v1.0.0`
+   (or run the **Release** workflow from the Actions tab and type the version).
+3. GitHub builds a universal `Clipforge-1.0.0.dmg` + `.zip` and publishes them on the Releases page.
+
+Signing and notarization switch on automatically when the Developer ID secrets listed at the top of
+`.github/workflows/release.yml` are added to the repository.
+
 ## Pull requests
 
 Keep them focused, describe what you tested, and make sure CI is green.

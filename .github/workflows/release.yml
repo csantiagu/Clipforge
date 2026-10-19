@@ -1,0 +1,124 @@
+name: Release
+
+# Push a tag like v1.0.0 (or run this workflow by hand with a version) to publish
+# Clipforge-<version>.dmg and .zip on the repository's Releases page.
+#
+# Optional signing and notarization: add these repository secrets and the release is
+# signed with your Developer ID and notarized by Apple, so users get no warning.
+#   DEVELOPER_ID_P12           base64 of your "Developer ID Application" certificate (.p12)
+#   DEVELOPER_ID_P12_PASSWORD  password of that .p12
+#   APPLE_ID                   your Apple ID email
+#   APPLE_APP_PASSWORD         app-specific password from appleid.apple.com
+#   APPLE_TEAM_ID              10-character team ID
+# Without them the app is ad-hoc signed and users must allow it once in
+# System Settings → Privacy & Security.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ github.event.inputs.version || github.ref_name }}
+      HAS_SIGNING: ${{ secrets.DEVELOPER_ID_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Work out version
+        run: echo "VERSION=${VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: Import signing certificate
+        if: env.HAS_SIGNING == 'true'
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          KEYCHAIN=$RUNNER_TEMP/signing.keychain-db
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Build universal app
+        run: UNIVERSAL=1 BUILD_NUMBER=${{ github.run_number }} ./build.sh
+
+      - name: Smoke test
+        run: |
+          lipo -archs build/Clipforge.app/Contents/MacOS/Clipforge
+          lipo -archs build/Clipforge.app/Contents/MacOS/ffmpeg
+          build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version | head -1 | tee ffmpeg-version.txt
+
+      - name: Make DMG and ZIP
+        run: |
+          scripts/make-dmg.sh "$VERSION"
+          ditto -c -k --keepParent build/Clipforge.app "build/Clipforge-$VERSION.zip"
+
+      - name: Notarize
+        if: env.HAS_SIGNING == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          codesign --force --timestamp --sign "$SIGN_IDENTITY" "build/Clipforge-$VERSION.dmg"
+          xcrun notarytool submit "build/Clipforge-$VERSION.dmg" \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "build/Clipforge-$VERSION.dmg"
+          # Re-zip the app with the notarization ticket stapled.
+          xcrun stapler staple build/Clipforge.app
+          rm "build/Clipforge-$VERSION.zip"
+          ditto -c -k --keepParent build/Clipforge.app "build/Clipforge-$VERSION.zip"
+
+      - name: Write release notes
+        run: |
+          FFMPEG=$(cat ffmpeg-version.txt)
+          {
+            echo "## Download"
+            echo
+            echo "**Clipforge-$VERSION.dmg**: open it and drag Clipforge to Applications. Works on Apple Silicon and Intel Macs, macOS 13 or later."
+            echo
+            if [ "$HAS_SIGNING" = "true" ]; then
+              echo "Signed and notarized by Apple."
+            else
+              echo "### First launch"
+              echo "This build isn't notarized by Apple, so macOS blocks it the first time:"
+              echo "1. Open Clipforge. When macOS says it can't verify it, click **Done**."
+              echo "2. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Clipforge."
+              echo "3. Confirm with your password. You only do this once."
+            fi
+            echo
+            echo "## What's new"
+            echo
+            awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2
+            echo
+            echo "## Licences"
+            echo
+            echo "Clipforge is GPL-3.0. It bundles $FFMPEG (GPL)."
+            echo "FFmpeg source: https://ffmpeg.org/download.html · builds by https://ffmpeg.martin-riedl.de."
+            echo "See THIRD_PARTY_NOTICES.md in the repository."
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" \
+            "build/Clipforge-$VERSION.dmg" "build/Clipforge-$VERSION.zip" \
+            --title "Clipforge $VERSION" --notes-file release-notes.md

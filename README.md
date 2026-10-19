@@ -28,8 +28,9 @@
 
 ## Install
 
-**Download:** grab `Clipforge.zip` from the latest [release](../../releases) (or from the `Clipforge-app` artifact of a green CI run), unzip it, and drag **Clipforge** to Applications.
-It isn't notarized by Apple, so the first time, **right-click → Open → Open**.
+**Download:** get the latest `Clipforge-x.y.z.dmg` from [Releases](../../releases), open it and drag **Clipforge** to Applications. One download works on Apple Silicon and Intel Macs.
+
+The first time you open it, macOS may say it can't verify the app (it isn't notarized by Apple yet). Click **Done**, then open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
 
 **Build it yourself** (needs the Xcode Command Line Tools: `xcode-select --install`):
 
