@@ -101,6 +101,9 @@ jobs:
               echo "1. Open Clipforge. When macOS says it can't verify it, click **Done**."
               echo "2. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Clipforge."
               echo "3. Confirm with your password. You only do this once."
+              echo
+              echo "Or run this once in Terminal after dragging it to Applications:"
+              echo '`xattr -dr com.apple.quarantine /Applications/Clipforge.app`'
             fi
             echo
             echo "## What's new"

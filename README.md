@@ -8,9 +8,11 @@
   Convert and shrink videos on your Mac. A friendly front end for ffmpeg, with ffmpeg built in.
 </p>
 
+<!-- Screenshot: add docs/screenshots/main.png, then remove this comment wrapper.
 <p align="center">
   <img src="docs/screenshots/main.png" alt="Clipforge with three videos queued, one encoding" width="900">
 </p>
+-->
 
 ## What it does
 
@@ -22,15 +24,25 @@
 - **See the size before you start.** Every setting shows what it costs, and the panel shows *now → after*.
 - **Never overwrites anything.** `movie.mkv` → `movie.mp4`, or `movie_new.mkv` when the format stays the same.
 
+<!-- Screenshot: add docs/screenshots/settings.png, then remove this comment wrapper.
 <p align="center">
   <img src="docs/screenshots/settings.png" alt="Settings panel with presets, size estimate and track picker" width="440">
 </p>
+-->
 
 ## Install
 
 **Download:** get the latest `Clipforge-x.y.z.dmg` from [Releases](../../releases), open it and drag **Clipforge** to Applications. One download works on Apple Silicon and Intel Macs.
 
-The first time you open it, macOS may say it can't verify the app (it isn't notarized by Apple yet). Click **Done**, then open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+The first time you open it, macOS says it can't verify the app, because it isn't notarized by Apple. Click **Done**, then open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+
+Or, after dragging it to Applications, run this once in Terminal instead:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Clipforge.app
+```
+
+This removes the "downloaded from the internet" flag that triggers the check.
 
 **Build it yourself** (needs the Xcode Command Line Tools: `xcode-select --install`):
 
