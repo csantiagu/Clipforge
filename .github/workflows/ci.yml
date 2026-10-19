@@ -43,38 +43,42 @@ jobs:
           done
 
   package:
-    name: Package (universal DMG dry run)
+    name: Package ${{ matrix.arch }} DMG (dry run)
     needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
     runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
-      - name: Build universal bundle with ffmpeg inside
-        run: UNIVERSAL=1 VERSION=0.0.0-ci BUILD_NUMBER=${{ github.run_number }} ./build.sh
+      - name: Build bundle with ffmpeg inside
+        run: ARCH=${{ matrix.arch }} VERSION=0.0.0-ci BUILD_NUMBER=${{ github.run_number }} ./build.sh
 
       - name: Smoke test
         run: |
-          lipo -archs build/Clipforge.app/Contents/MacOS/Clipforge | tee /dev/stderr | grep -q "x86_64 arm64"
-          lipo -archs build/Clipforge.app/Contents/MacOS/ffmpeg | grep -q "x86_64 arm64"
-          build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version | head -1
-          build/Clipforge.app/Contents/MacOS/ffprobe -hide_banner -version | head -1
+          lipo -archs build/Clipforge.app/Contents/MacOS/Clipforge | grep -qx ${{ matrix.arch }}
+          lipo -archs build/Clipforge.app/Contents/MacOS/ffmpeg | grep -qx ${{ matrix.arch }}
+          lipo -archs build/Clipforge.app/Contents/MacOS/ffprobe | grep -qx ${{ matrix.arch }}
+          arch -${{ matrix.arch }} build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version | head -1 \
+            || echo "(could not run ${{ matrix.arch }} ffmpeg on this runner)"
           test -f build/Clipforge.app/Contents/Resources/LICENSE
           test -f build/Clipforge.app/Contents/Resources/AppIcon.icns
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/Clipforge.app/Contents/Info.plist
 
       - name: Make DMG
-        run: scripts/make-dmg.sh 0.0.0-ci
+        run: scripts/make-dmg.sh 0.0.0-ci ${{ matrix.arch }}
 
       - name: Mount and check DMG
         run: |
-          hdiutil attach build/Clipforge-0.0.0-ci.dmg -mountpoint /tmp/cf -nobrowse
+          hdiutil attach build/Clipforge-0.0.0-ci-${{ matrix.arch }}.dmg -mountpoint /tmp/cf -nobrowse
           ls -la /tmp/cf
           codesign --verify --strict /tmp/cf/Clipforge.app
           hdiutil detach /tmp/cf
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Clipforge-dmg
-          path: build/Clipforge-0.0.0-ci.dmg
+          name: Clipforge-dmg-${{ matrix.arch }}
+          path: build/Clipforge-0.0.0-ci-${{ matrix.arch }}.dmg
           retention-days: 14

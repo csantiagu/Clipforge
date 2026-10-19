@@ -3,6 +3,7 @@
 #
 #   ./build.sh                     download static ffmpeg for this Mac's CPU (cached in vendor/)
 #   FFMPEG_DIR=/path ./build.sh    use your own ffmpeg + ffprobe binaries from /path
+#   ARCH=x86_64 ./build.sh         build for another CPU type (arm64 or x86_64)
 #   UNIVERSAL=1 ./build.sh         one app for Apple Silicon and Intel (needs full Xcode)
 #   VERSION=1.2.0 ./build.sh       stamp the version shown in Finder and About
 #   SIGN_IDENTITY="Developer ID Application: …" ./build.sh
@@ -51,7 +52,7 @@ if [ "${UNIVERSAL:-0}" = 1 ]; then
     lipo -create "vendor/arm64/$tool" "vendor/x86_64/$tool" -output "$VENDOR/$tool"
   done
 else
-  ARCH=$(uname -m)
+  ARCH=${ARCH:-$(uname -m)}
   echo "==> Compiling (release, $ARCH)"
   swift build -c release --arch "$ARCH"
   BIN_DIR=$(swift build -c release --arch "$ARCH" --show-bin-path)

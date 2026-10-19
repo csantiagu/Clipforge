@@ -32,7 +32,12 @@
 
 ## Install
 
-**Download:** get the latest `Clipforge-x.y.z.dmg` from [Releases](../../releases), open it and drag **Clipforge** to Applications. One download works on Apple Silicon and Intel Macs.
+**Download:** from [Releases](../../releases), get the DMG for your Mac (Apple menu → **About This Mac**):
+
+- **Chip: Apple M1, M2, M3, M4…** → `Clipforge-x.y.z-AppleSilicon.dmg`
+- **Processor: Intel…** → `Clipforge-x.y.z-Intel.dmg`
+
+Open it and drag **Clipforge** to Applications.
 
 The first time you open it, macOS says it can't verify the app, because it isn't notarized by Apple. Click **Done**, then open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
 
