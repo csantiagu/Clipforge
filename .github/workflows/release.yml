@@ -1,9 +1,9 @@
 name: Release
 
-# Push a tag like v1.0.0 (or run this workflow by hand with a version) to publish
-# Clipforge-<version>-AppleSilicon.dmg and -Intel.dmg on the repository's Releases page.
+# Run this workflow from the Actions tab with a version (e.g. 1.0.0), or push a tag like v1.0.0.
+# It publishes Clipforge-<version>-AppleSilicon.dmg and -Intel.dmg on the Releases page.
 #
-# Optional signing and notarization: add these repository secrets and the release is
+# Optional signing and notarization: add these repository secrets and the DMGs are
 # signed with your Developer ID and notarized by Apple, so users get no warning.
 #   DEVELOPER_ID_P12           base64 of your "Developer ID Application" certificate (.p12)
 #   DEVELOPER_ID_P12_PASSWORD  password of that .p12
@@ -16,6 +16,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+    # Pushing this branch runs everything except publishing, to test the pipeline.
+    branches: [release-dry-run]
   workflow_dispatch:
     inputs:
       version:
@@ -25,18 +27,29 @@ on:
 permissions:
   contents: write
 
+env:
+  RAW_VERSION: ${{ github.event.inputs.version || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '0.0.0-dryrun' }}
+
 jobs:
-  release:
+  build:
+    name: Build ${{ matrix.label }} DMG
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm64
+            label: AppleSilicon
+          - arch: x86_64
+            label: Intel
     runs-on: macos-15
     timeout-minutes: 45
     env:
-      VERSION: ${{ github.event.inputs.version || github.ref_name }}
       HAS_SIGNING: ${{ secrets.DEVELOPER_ID_P12 != '' }}
     steps:
       - uses: actions/checkout@v5
 
       - name: Work out version
-        run: echo "VERSION=${VERSION#v}" >> "$GITHUB_ENV"
+        run: echo "VERSION=${RAW_VERSION#v}" >> "$GITHUB_ENV"
 
       - name: Import signing certificate
         if: env.HAS_SIGNING == 'true'
@@ -55,23 +68,35 @@ jobs:
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
           echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
-      - name: Build Apple Silicon DMG
+      - name: Build app
         run: |
-          ARCH=arm64 VERSION=$VERSION BUILD_NUMBER=${{ github.run_number }} ./build.sh
-          lipo -archs build/Clipforge.app/Contents/MacOS/Clipforge | grep -qx arm64
-          lipo -archs build/Clipforge.app/Contents/MacOS/ffmpeg | grep -qx arm64
-          build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version | head -1 | tee ffmpeg-arm64.txt
-          scripts/make-dmg.sh "$VERSION" AppleSilicon
+          set -o pipefail
+          ARCH=${{ matrix.arch }} BUILD_NUMBER=${{ github.run_number }} ./build.sh 2>&1 | tee build.log || {
+            tail -n 8 build.log | while IFS= read -r line; do echo "::error title=build.sh (${{ matrix.label }})::$line"; done
+            exit 1
+          }
 
-      - name: Build Intel DMG
+      - name: Check app
         run: |
-          ARCH=x86_64 VERSION=$VERSION BUILD_NUMBER=${{ github.run_number }} ./build.sh
-          lipo -archs build/Clipforge.app/Contents/MacOS/Clipforge | grep -qx x86_64
-          lipo -archs build/Clipforge.app/Contents/MacOS/ffmpeg | grep -qx x86_64
-          # Runs through Rosetta on the Apple Silicon runner, if Rosetta is installed.
-          arch -x86_64 build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version | head -1 | tee ffmpeg-x86_64.txt \
-            || echo "(Rosetta not available on this runner; skipped running the Intel ffmpeg)"
-          scripts/make-dmg.sh "$VERSION" Intel
+          lipo -archs build/Clipforge.app/Contents/MacOS/Clipforge | grep -qx ${{ matrix.arch }}
+          lipo -archs build/Clipforge.app/Contents/MacOS/ffmpeg | grep -qx ${{ matrix.arch }}
+          lipo -archs build/Clipforge.app/Contents/MacOS/ffprobe | grep -qx ${{ matrix.arch }}
+          test -f build/Clipforge.app/Contents/Resources/LICENSE
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/Clipforge.app/Contents/Info.plist | grep -qx "$VERSION"
+          # The Intel ffmpeg only runs here if Rosetta is installed.
+          { arch -${{ matrix.arch }} build/Clipforge.app/Contents/MacOS/ffmpeg -hide_banner -version 2>/dev/null | head -1; } > ffmpeg-${{ matrix.arch }}.txt || true
+          cat ffmpeg-${{ matrix.arch }}.txt
+
+      - name: Make DMG
+        run: |
+          set -o pipefail
+          scripts/make-dmg.sh "$VERSION" ${{ matrix.label }} 2>&1 | tee dmg.log || {
+            tail -n 8 dmg.log | while IFS= read -r line; do echo "::error title=make-dmg (${{ matrix.label }})::$line"; done
+            exit 1
+          }
+          hdiutil attach "build/Clipforge-$VERSION-${{ matrix.label }}.dmg" -mountpoint /tmp/cf -nobrowse
+          codesign --verify --strict /tmp/cf/Clipforge.app
+          hdiutil detach /tmp/cf
 
       - name: Notarize
         if: env.HAS_SIGNING == 'true'
@@ -80,16 +105,42 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          for dmg in build/Clipforge-$VERSION-*.dmg; do
-            codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dmg"
-            xcrun notarytool submit "$dmg" \
-              --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
-            xcrun stapler staple "$dmg"
-          done
+          dmg="build/Clipforge-$VERSION-${{ matrix.label }}.dmg"
+          codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dmg"
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "$dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.label }}
+          path: |
+            build/Clipforge-*.dmg
+            ffmpeg-${{ matrix.arch }}.txt
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      HAS_SIGNING: ${{ secrets.DEVELOPER_ID_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Work out version
+        run: echo "VERSION=${RAW_VERSION#v}" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
 
       - name: Write release notes
         run: |
-          FFMPEG=$(cat ffmpeg-arm64.txt)
+          ls -la dist dist/build 2>/dev/null || true
+          FFMPEG=$(cat dist/ffmpeg-arm64.txt 2>/dev/null || true)
           {
             echo "## Download"
             echo
@@ -122,16 +173,23 @@ jobs:
             echo
             echo "## Licences"
             echo
-            echo "Clipforge is GPL-3.0. It bundles $FFMPEG (GPL)."
+            echo "Clipforge is GPL-3.0. It bundles ${FFMPEG:-FFmpeg} (GPL)."
             echo "FFmpeg source: https://ffmpeg.org/download.html · builds by https://ffmpeg.martin-riedl.de."
             echo "See THIRD_PARTY_NOTICES.md in the repository."
           } > release-notes.md
           cat release-notes.md
 
+      - name: Check both DMGs are there
+        run: |
+          shopt -s globstar
+          ls -la dist/**/Clipforge-$VERSION-AppleSilicon.dmg dist/**/Clipforge-$VERSION-Intel.dmg
+
       - name: Publish release
+        if: github.ref != 'refs/heads/release-dry-run'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v$VERSION" \
-            "build/Clipforge-$VERSION-AppleSilicon.dmg" "build/Clipforge-$VERSION-Intel.dmg" \
+          shopt -s globstar
+          gh release create "v$VERSION" --target "$GITHUB_SHA" \
+            dist/**/Clipforge-$VERSION-AppleSilicon.dmg dist/**/Clipforge-$VERSION-Intel.dmg \
             --title "Clipforge $VERSION" --notes-file release-notes.md

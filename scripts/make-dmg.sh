@@ -19,6 +19,14 @@ cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cp THIRD_PARTY_NOTICES.md "$STAGE/Licenses and FFmpeg source.md"
 
-hdiutil create -volname "Clipforge $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+# hdiutil sometimes fails with "Resource busy" while macOS scans fresh files; retry.
+for attempt in 1 2 3 4 5; do
+  if hdiutil create -volname "Clipforge $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null; then
+    break
+  fi
+  if [ "$attempt" = 5 ]; then echo "hdiutil failed 5 times"; exit 1; fi
+  echo "hdiutil failed, retrying ($attempt)…"
+  sleep $((attempt * 3))
+done
 rm -rf "$STAGE"
 echo "$DMG ($(du -h "$DMG" | cut -f1))"
