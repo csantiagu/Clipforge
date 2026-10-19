@@ -1,0 +1,35 @@
+name: Move release tags
+
+# After history is rewritten (commit messages changed, files identical), release tags still
+# point at the old commits. This moves every v* tag to the commit on main with the same files.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Move tags
+        run: |
+          git fetch --force --tags origin
+          for tag in $(git tag -l 'v*'); do
+            old=$(git rev-list -n 1 "$tag")
+            tree=$(git rev-parse "$old^{tree}")
+            new=$(git log --format='%H %T' origin/main | awk -v t="$tree" '$2 == t { print $1; exit }')
+            if [ -z "$new" ]; then
+              echo "::warning::$tag: no commit on main has the same files; left alone"
+            elif [ "$new" = "$old" ]; then
+              echo "$tag already on main ($old)"
+            else
+              git tag -f "$tag" "$new"
+              git push --force origin "refs/tags/$tag"
+              echo "::notice::$tag moved ${old:0:7} → ${new:0:7}"
+            fi
+          done
