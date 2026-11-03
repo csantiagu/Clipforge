@@ -20,6 +20,7 @@
 - **Remux.** Change MKV ↔ MP4 ↔ MOV in seconds, with no quality loss.
 - **Keep only the tracks you want.** Tick audio and subtitle tracks per file, or keep one language across a whole season.
 - **See the size before you start.** Every setting shows what it costs, and the panel shows *now → after*.
+- **Images too.** Convert HEIC ↔ JPEG ↔ PNG ↔ TIFF, shrink photos, and remove location and other metadata, without losing quality when only metadata changes.
 - **Save next to the original or to any folder.** Names stay the same (`movie.mkv` → `movie.mp4`); `_new` is added only when the name is already taken. Nothing is ever overwritten.
 
 <p align="center">
@@ -68,6 +69,19 @@ Requires macOS 13 or later. On macOS 26 it uses Liquid Glass; earlier versions g
 6. **Start** (⌘↩). Videos are encoded one at a time and your Mac won't idle-sleep. **Stop** (⌘.) deletes the half-written file.
 
 Open **ffmpeg command** at the bottom of the panel to see and copy the exact command for a video.
+
+### Images
+
+Switch to **Images** at the top (or just drop photos on the window). Pick a preset:
+
+| Preset | What it does |
+|---|---|
+| Share safely | Same format, longest side 2048 px, all metadata removed |
+| Smallest | HEIC at 1600 px, about a tenth of a phone photo |
+| Strip metadata | Removes location, camera and dates; JPEG/PNG/TIFF are copied untouched |
+| To JPEG | HEIC or PNG to JPEG, which opens everywhere; removes the location |
+
+Photos that carry a location get an orange **Location** tag. Select one to see everything that's stored in it and what will be removed. The size shown is exact, because each image is converted in memory before you save.
 
 ## What the settings mean for size
 

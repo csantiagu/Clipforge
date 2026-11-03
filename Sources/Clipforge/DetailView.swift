@@ -184,7 +184,10 @@ struct SettingsForm: View {
                         .frame(maxWidth: 220)
                     }
                     hint(containerHint)
-                    row("Save to") { DestinationMenu() }
+                    row("Save to") {
+                        DestinationMenu(current: model.selectionOutputFolder, remembered: model.defaultOutputFolder,
+                                        setFolder: { model.setOutputFolder($0) }, chooseFolder: { model.chooseOutputFolder() })
+                    }
                     hint("Next to the original, same format, adds _new to the name. In another folder the name stays the same. Nothing is ever overwritten.")
                 }
             }
@@ -321,25 +324,28 @@ struct SettingsForm: View {
 
 /// Where converted files go. Not part of presets, and remembered between launches.
 struct DestinationMenu: View {
-    @EnvironmentObject private var model: AppModel
+    /// nil = the selection goes to different places; .some(nil) = next to the original.
+    let current: URL??
+    let remembered: URL?
+    let setFolder: (URL?) -> Void
+    let chooseFolder: () -> Void
 
     var body: some View {
-        let current = model.selectionOutputFolder
         Menu {
             Button {
-                model.setOutputFolder(nil)
+                setFolder(nil)
             } label: {
                 Label("Next to Original", systemImage: "arrow.turn.down.right")
             }
-            if let remembered = model.defaultOutputFolder, current != .some(remembered) {
+            if let remembered, current != .some(remembered) {
                 Button {
-                    model.setOutputFolder(remembered)
+                    setFolder(remembered)
                 } label: {
                     Label(remembered.lastPathComponent, systemImage: "folder")
                 }
             }
             Divider()
-            Button("Choose Folder…") { model.chooseOutputFolder() }
+            Button("Choose Folder…") { chooseFolder() }
         } label: {
             Label(title(for: current), systemImage: icon(for: current))
         }
@@ -362,8 +368,8 @@ struct DestinationMenu: View {
 
     private func helpText(for folder: URL??) -> String {
         switch folder {
-        case .none: return "The selected videos are saved to different places."
-        case .some(.none): return "Saved in the same folder as each original video."
+        case .none: return "The selected files are saved to different places."
+        case .some(.none): return "Saved in the same folder as each original."
         case .some(.some(let url)): return url.path
         }
     }

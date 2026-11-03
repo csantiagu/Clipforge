@@ -4,25 +4,39 @@ import ClipforgeCore
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var images: ImageModel
+    @AppStorage("tab") private var tab: AppTab = .videos
 
     var body: some View {
         ZStack {
-            AuroraBackground(energized: model.isRunning)
+            AuroraBackground(energized: model.isRunning || images.isRunning)
             HStack(alignment: .top, spacing: 16) {
-                QueueColumn()
-                    .frame(minWidth: 440, maxWidth: .infinity)
-                if !model.jobs.isEmpty {
-                    DetailPanel()
-                        .frame(width: 440)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                switch tab {
+                case .videos:
+                    QueueColumn(tab: $tab, onDrop: route)
+                        .frame(minWidth: 440, maxWidth: .infinity)
+                    if !model.jobs.isEmpty {
+                        DetailPanel()
+                            .frame(width: 440)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                case .images:
+                    ImageQueueColumn(tab: $tab, onDrop: route)
+                        .frame(minWidth: 440, maxWidth: .infinity)
+                    if !images.jobs.isEmpty {
+                        ImageDetailPanel()
+                            .frame(width: 440)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: model.jobs.isEmpty)
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: images.jobs.isEmpty)
         .overlay(alignment: .top) {
-            if model.ffmpegURL == nil || model.ffprobeURL == nil {
+            if tab == .videos && (model.ffmpegURL == nil || model.ffprobeURL == nil) {
                 Label("ffmpeg/ffprobe not found. Build the app with ./build.sh (it bundles ffmpeg), or run `brew install ffmpeg`.",
                       systemImage: "exclamationmark.triangle.fill")
                     .padding(.horizontal, 16)
@@ -32,19 +46,34 @@ struct ContentView: View {
             }
         }
     }
+
+    /// Dropped files go to the queue they belong in, whichever tab they were dropped on.
+    private func route(_ urls: [URL]) {
+        let (pictures, others) = urls.reduce(into: ([URL](), [URL]())) { result, url in
+            if ImageModel.isImage(url) { result.0.append(url) } else { result.1.append(url) }
+        }
+        if !pictures.isEmpty { images.add(pictures) }
+        if !others.isEmpty { model.add(others) }
+        if !pictures.isEmpty && others.isEmpty { tab = .images }
+        if pictures.isEmpty && !others.isEmpty { tab = .videos }
+    }
 }
 
 // MARK: - Queue
 
 struct QueueColumn: View {
     @EnvironmentObject private var model: AppModel
+    @Binding var tab: AppTab
+    let onDrop: ([URL]) -> Void
     @State private var dropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            QueueHeader()
+            QueueHeader(tab: $tab, totals: model.jobs.isEmpty ? nil : totals)
             if model.jobs.isEmpty {
-                DropHero(targeted: dropTargeted)
+                DropHero(targeted: dropTargeted, systemImage: "film.stack", title: "Drop videos here",
+                         subtitle: "MKV, MP4, MOV, AVI, phone videos, anything ffmpeg reads",
+                         buttonTitle: "Choose Videos…") { model.showOpenPanel() }
             } else {
                 ScrollView {
                     LazyVStack(spacing: 10) {
@@ -67,15 +96,23 @@ struct QueueColumn: View {
             if !model.jobs.isEmpty { Dock() }
         }
         .overlay {
-            if dropTargeted && !model.jobs.isEmpty {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
-            }
+            if dropTargeted && !model.jobs.isEmpty { DropOutline() }
         }
         .dropDestination(for: URL.self) { urls, _ in
-            model.add(urls)
+            onDrop(urls)
             return true
         } isTargeted: { dropTargeted = $0 }
+    }
+
+    private var totals: String {
+        let count = model.jobs.count
+        let source = model.jobs.compactMap { $0.info?.fileSize }.reduce(0, +)
+        var text = "\(count) video\(count == 1 ? "" : "s") · \(Format.bytes(source))"
+        let outputs = model.jobs.compactMap(\.expectedOutputBytes)
+        if outputs.count == count, source > 0 {
+            text += "  →  ≈ \(Format.bytes(outputs.reduce(0, +)))"
+        }
+        return text
     }
 
     @ViewBuilder private func menu(for job: Job) -> some View {
@@ -89,21 +126,38 @@ struct QueueColumn: View {
     }
 }
 
+struct DropOutline: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
+    }
+}
+
+/// App name, the Videos | Images switch, and the queue totals.
 struct QueueHeader: View {
-    @EnvironmentObject private var model: AppModel
+    @Binding var tab: AppTab
+    let totals: String?
 
     var body: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 14) {
             Text("Clipforge")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+            Picker("Mode", selection: $tab) {
+                Label("Videos", systemImage: "film").tag(AppTab.videos)
+                Label("Images", systemImage: "photo").tag(AppTab.images)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
             Spacer()
-            if !model.jobs.isEmpty {
+            if let totals {
                 Text(totals)
                     .font(.callout.weight(.medium))
                     .fontDesign(.rounded)
                     .monospacedDigit()
+                    .lineLimit(1)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .glassSurface(cornerRadius: 14)
@@ -111,22 +165,15 @@ struct QueueHeader: View {
         }
         .padding(.horizontal, 4)
     }
-
-    private var totals: String {
-        let count = model.jobs.count
-        let source = model.jobs.compactMap { $0.info?.fileSize }.reduce(0, +)
-        var text = "\(count) video\(count == 1 ? "" : "s") · \(Format.bytes(source))"
-        let outputs = model.jobs.compactMap(\.expectedOutputBytes)
-        if outputs.count == count, source > 0 {
-            text += "  →  ≈ \(Format.bytes(outputs.reduce(0, +)))"
-        }
-        return text
-    }
 }
 
 struct DropHero: View {
-    @EnvironmentObject private var model: AppModel
     let targeted: Bool
+    let systemImage: String
+    let title: String
+    let subtitle: String
+    let buttonTitle: String
+    let choose: () -> Void
 
     var body: some View {
         VStack(spacing: 20) {
@@ -134,7 +181,7 @@ struct DropHero: View {
                 .frame(width: 168, height: 168)
                 .glassSurface(cornerRadius: 84, tint: targeted ? Color.white.opacity(0.3) : nil)
                 .overlay {
-                    Image(systemName: targeted ? "arrow.down.circle" : "film.stack")
+                    Image(systemName: targeted ? "arrow.down.circle" : systemImage)
                         .font(.system(size: 60, weight: .light))
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.white)
@@ -142,15 +189,15 @@ struct DropHero: View {
                 .scaleEffect(targeted ? 1.08 : 1)
                 .animation(.spring(response: 0.35, dampingFraction: 0.6), value: targeted)
             VStack(spacing: 6) {
-                Text(targeted ? "Let go to add" : "Drop videos here")
+                Text(targeted ? "Let go to add" : title)
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
-                Text("MKV, MP4, MOV, AVI, phone videos, anything ffmpeg reads")
+                Text(subtitle)
                     .opacity(0.8)
             }
             .foregroundStyle(.white)
             .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
-            Button { model.showOpenPanel() } label: {
-                Label("Choose Videos…", systemImage: "plus")
+            Button(action: choose) {
+                Label(buttonTitle, systemImage: "plus")
                     .padding(.horizontal, 6)
             }
             .glassButton(prominent: true)
