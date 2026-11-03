@@ -284,9 +284,19 @@ public enum ImageProcessor {
         case .keepAll:
             break
         case .removeLocation:
+            // Copy all metadata and delete just the GPS tags, wherever they are stored (EXIF or XMP).
+            // (kCGImageMetadataShouldExcludeXMP looked tempting but also drops camera and date.)
+            guard let original = CGImageSourceCopyMetadataAtIndex(source, 0, nil),
+                  let metadata = CGImageMetadataCreateMutableCopy(original) else { return nil }
+            var gpsPaths: [CFString] = []
+            CGImageMetadataEnumerateTagsUsingBlock(metadata, nil, [kCGImageMetadataEnumerateRecursively: true] as CFDictionary) { path, tag in
+                if let name = CGImageMetadataTagCopyName(tag) as String?, name.hasPrefix("GPS") { gpsPaths.append(path) }
+                return true
+            }
+            for path in gpsPaths { _ = CGImageMetadataRemoveTagWithPath(metadata, nil, path) }
+            options[kCGImageDestinationMetadata] = metadata
+            options[kCGImageDestinationMergeMetadata] = false
             options[kCGImageMetadataShouldExcludeGPS] = true
-            // XMP can carry a second copy of the location.
-            options[kCGImageMetadataShouldExcludeXMP] = true
         case .removeAll:
             // Replace everything with metadata that holds only the orientation, so the
             // picture still displays the right way up.
