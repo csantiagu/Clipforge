@@ -8,7 +8,9 @@ labels: bug
 
 **What you expected**
 
-**ffmpeg command**
+**Videos or Images?**
+
+**For videos: the ffmpeg command**
 Select the video in Clipforge, open "ffmpeg command" at the bottom of the panel, click Copy and paste it here.
 
 ```
@@ -22,4 +24,6 @@ Select the video in Clipforge, open "ffmpeg command" at the bottom of the panel,
 - Clipforge version:
 
 **The source file**
-Output of `ffprobe -hide_banner yourfile` helps a lot (it only lists tracks, not content).
+- Videos: the output of `ffprobe -hide_banner yourfile` helps a lot (it only lists tracks, not content).
+- Images: the format and size shown on the card, and the settings you chose (format, quality, max size, metadata).
+  Please don't attach personal photos; their metadata can include where they were taken.

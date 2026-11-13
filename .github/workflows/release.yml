@@ -41,7 +41,8 @@ jobs:
             label: AppleSilicon
           - arch: x86_64
             label: Intel
-    runs-on: macos-15
+    # Xcode 26 compiles the Liquid Glass interface; the app still runs on macOS 13 and later.
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       HAS_SIGNING: ${{ secrets.DEVELOPER_ID_P12 != '' }}

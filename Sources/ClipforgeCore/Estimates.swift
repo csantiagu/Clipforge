@@ -61,10 +61,16 @@ public enum OutputNamer {
     public static func outputURL(for input: URL, container: Container, directory: URL? = nil,
                                  reserved: Set<String> = [],
                                  exists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }) -> URL {
+        outputURL(for: input, fileExtension: container.fileExtension, directory: directory, reserved: reserved, exists: exists)
+    }
+
+    /// Same rules for any file type, e.g. images (`IMG_0001.HEIC` → `IMG_0001.jpg`).
+    public static func outputURL(for input: URL, fileExtension ext: String, directory: URL? = nil,
+                                 reserved: Set<String> = [],
+                                 exists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }) -> URL {
         let sourceDirectory = input.deletingLastPathComponent()
         let directory = directory ?? sourceDirectory
         let base = input.deletingPathExtension().lastPathComponent
-        let ext = container.fileExtension
         func isTaken(_ url: URL) -> Bool { exists(url) || reserved.contains(url.path.lowercased()) }
 
         let sameFolder = directory.standardizedFileURL.path.lowercased()

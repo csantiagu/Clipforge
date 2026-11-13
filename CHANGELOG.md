@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- New **Images** tab: convert between HEIC, JPEG, PNG and TIFF, shrink photos, and remove metadata.
+  - Remove all metadata, only the location, or keep it. Photos with a location show an orange tag,
+    and the panel lists what was found (location, camera, date, owner, serial number) and what will go.
+  - "Strip metadata" copies JPEG, PNG and TIFF untouched, so quality doesn't change.
+  - Rotation and colour profile are kept, so pictures look the same.
+  - The size shown is exact: each image is converted in memory first.
+- Dropped files go to the right tab automatically. ⌘O adds files to the tab you're on.
+- Releases are now built with Xcode 26, so on macOS 26 the app shows the real Liquid Glass interface
+  (earlier releases always showed the frosted fallback). macOS 13 and later are still supported.
+
 ## 1.1.0 (2026-10-19)
 
 - Choose where converted videos are saved: next to the original (default) or any folder.

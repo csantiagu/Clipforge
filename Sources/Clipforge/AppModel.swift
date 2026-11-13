@@ -262,15 +262,9 @@ final class AppModel: ObservableObject {
     }
 
     func chooseOutputFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Save Here"
-        panel.message = "Choose where converted videos are saved"
-        if let current = defaultOutputFolder { panel.directoryURL = current }
-        if panel.runModal() == .OK, let url = panel.url { setOutputFolder(url) }
+        if let url = FolderPicker.choose(startingAt: defaultOutputFolder, message: "Choose where converted videos are saved") {
+            setOutputFolder(url)
+        }
     }
 
     // MARK: - Tracks
@@ -419,15 +413,11 @@ final class AppModel: ObservableObject {
         refreshAll()
         guard let job = job(id), let info = job.info, let output = job.plannedOutput else { return }
         // External drives get unplugged; say so instead of letting ffmpeg fail obscurely.
-        if let folder = job.outputFolder {
-            var isDirectory: ObjCBool = false
-            let exists = FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory)
-            guard exists, isDirectory.boolValue, FileManager.default.isWritableFile(atPath: folder.path) else {
-                update(id) {
-                    $0.status = .failed("Can't save to “\(folder.lastPathComponent)”: the folder is missing or read-only. Is the drive connected?")
-                }
-                return
+        if let folder = job.outputFolder, !FolderPicker.isWritableFolder(folder) {
+            update(id) {
+                $0.status = .failed("Can't save to “\(folder.lastPathComponent)”: the folder is missing or read-only. Is the drive connected?")
             }
+            return
         }
         // The name was free a moment ago; never touch a file we didn't create.
         if FileManager.default.fileExists(atPath: output.path) {
