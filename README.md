@@ -40,11 +40,9 @@
   <img src="docs/screenshots/settings.png" alt="Settings panel with presets and the output, video and audio options" width="440">
 </p>
 
-<!-- Screenshot: add docs/screenshots/images.png (the Images tab with a few photos), then remove this comment wrapper.
 <p align="center">
   <img src="docs/screenshots/images.png" alt="Images tab with photos queued, one showing its location and the metadata that will be removed" width="900">
 </p>
--->
 
 ## Install
 
