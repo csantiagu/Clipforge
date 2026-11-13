@@ -9,6 +9,8 @@
   - Rotation and colour profile are kept, so pictures look the same.
   - The size shown is exact: each image is converted in memory first.
 - Dropped files go to the right tab automatically. ⌘O adds files to the tab you're on.
+- Releases are now built with Xcode 26, so on macOS 26 the app shows the real Liquid Glass interface
+  (earlier releases always showed the frosted fallback). macOS 13 and later are still supported.
 
 ## 1.1.0 (2026-10-19)
 
